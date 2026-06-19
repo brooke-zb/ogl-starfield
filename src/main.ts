@@ -8,6 +8,7 @@ import {
   CLEAR_COLOR,
 } from './constants'
 import { createCloudCone } from './cloudCone'
+import { createSharpenPost } from './sharpenPost'
 import { createStarfield } from './starfield'
 
 // 创建全屏 canvas，作为 WebGL 渲染目标
@@ -62,6 +63,7 @@ function updatePointer(clientX: number, clientY: number): void {
 // 创建星云层和星星层，并挂载到同一个场景根节点
 const cloudCone = createCloudCone(gl)
 const starfield = createStarfield(gl)
+const sharpenPost = createSharpenPost(gl)
 cloudCone.setParent(scene)
 starfield.setParent(scene)
 
@@ -71,6 +73,7 @@ function resize(): void {
   camera.perspective({
     aspect: gl.canvas.width / gl.canvas.height,
   })
+  sharpenPost.resize()
 }
 
 function updateCamera(delta: number): void {
@@ -118,7 +121,7 @@ function animate(now: number): void {
   cloudCone.program.uniforms.uGlobalAlpha.value = globalAlpha
 
   // 渲染当前帧
-  renderer.render({
+  sharpenPost.render({
     scene,
     camera,
     sort: true,
