@@ -12,14 +12,11 @@ import type { TextureOptions } from 'ogl'
 
 const STAR_COUNT = 1500
 const STAR_LIFE_TIME = 20
-const STAR_SPEED = 2
-const STAR_SIZE_MIN = 20
-const STAR_SIZE_MAX = 25
-const STAR_SIZE_NEAR_DEPTH = 0
-const STAR_SIZE_FAR_DEPTH = 55
-const STAR_SIZE_DEPTH_CURVE = 1.4
-const STAR_SIZE_FAR_SCALE = 0.08
-const STAR_SIZE_NEAR_SCALE = 1.05
+const STAR_SPEED = 2.5
+const STAR_WORLD_SIZE_MIN = 0.2
+const STAR_WORLD_SIZE_MAX = 0.5
+const STAR_EMITTER_X_HALF_SIZE = 50
+const STAR_EMITTER_Z_HALF_SIZE = 30
 const CAMERA_FOV = 1.2 * 180 / Math.PI
 const CAMERA_SENSIBILITY = 5
 const CLEAR_COLOR = [2 / 255, 6 / 255, 25 / 255, 1] as const
@@ -90,10 +87,23 @@ function updatePointer(clientX: number, clientY: number): void {
 }
 
 function createStarfield(): Mesh {
-  // 准备点精灵需要的几何属性
-  const positions = new Float32Array(STAR_COUNT * 3)
+  // 准备 billboard 基础面片和实例化属性
+  const corners = new Float32Array([
+    -0.5, -0.5,
+    0.5, -0.5,
+    -0.5, 0.5,
+    0.5, 0.5,
+  ])
+  const uvs = new Float32Array([
+    0, 0,
+    1, 0,
+    0, 1,
+    1, 1,
+  ])
+  const indices = new Uint16Array([0, 1, 2, 2, 1, 3])
+  const basePositions = new Float32Array(STAR_COUNT * 3)
   const colors = new Float32Array(STAR_COUNT * 3)
-  const sizes = new Float32Array(STAR_COUNT)
+  const worldSizes = new Float32Array(STAR_COUNT)
   const phases = new Float32Array(STAR_COUNT)
 
   // 随机生成每颗星星的初始位置、颜色、尺寸和生命周期相位
@@ -103,9 +113,11 @@ function createStarfield(): Mesh {
     const colorMix = Math.random()
 
     // 生成星星在发射平面上的初始位置
-    positions[positionOffset] = Math.random() * 100 - 50
-    positions[positionOffset + 1] = 0
-    positions[positionOffset + 2] = Math.random() * 60 - 30
+    basePositions[positionOffset] =
+      Math.random() * STAR_EMITTER_X_HALF_SIZE * 2 - STAR_EMITTER_X_HALF_SIZE
+    basePositions[positionOffset + 1] = 0
+    basePositions[positionOffset + 2] =
+      Math.random() * STAR_EMITTER_Z_HALF_SIZE * 2 - STAR_EMITTER_Z_HALF_SIZE
 
     // 在紫色和青色之间插值生成星星颜色
     colors[colorOffset] = (134 + (8 - 134) * colorMix) / 255
@@ -113,7 +125,9 @@ function createStarfield(): Mesh {
     colors[colorOffset + 2] = (255 + (214 - 255) * colorMix) / 255
 
     // 设置基础尺寸和生命周期偏移，避免所有星星同步闪烁
-    sizes[index] = Math.random() * (STAR_SIZE_MAX - STAR_SIZE_MIN) + STAR_SIZE_MIN
+    worldSizes[index] =
+      Math.random() * (STAR_WORLD_SIZE_MAX - STAR_WORLD_SIZE_MIN) +
+      STAR_WORLD_SIZE_MIN
     phases[index] = Math.random() * STAR_LIFE_TIME
   }
 
@@ -123,57 +137,54 @@ function createStarfield(): Mesh {
     minFilter: gl.LINEAR_MIPMAP_LINEAR,
     magFilter: gl.LINEAR,
   })
-  // 组装点精灵几何属性
+  // 组装实例化 billboard 几何属性
   const geometry = new Geometry(gl, {
-    position: { size: 3, data: positions },
-    color: { size: 3, data: colors },
-    size: { size: 1, data: sizes },
-    phase: { size: 1, data: phases },
+    corner: { size: 2, data: corners },
+    uv: { size: 2, data: uvs },
+    index: { data: indices },
+    basePosition: { size: 3, data: basePositions, instanced: 1 },
+    color: { size: 3, data: colors, instanced: 1 },
+    worldSize: { size: 1, data: worldSizes, instanced: 1 },
+    phase: { size: 1, data: phases, instanced: 1 },
   })
-  // 创建星星 shader，在 GPU 中计算生命周期、远近缩放和贴图着色
+  // 创建星星 shader，在 view space 中展开面向相机的世界空间 billboard
   const program = new Program(gl, {
     vertex: /* glsl */ `
       precision highp float;
 
-      attribute vec3 position;
+      attribute vec2 corner;
+      attribute vec2 uv;
+      attribute vec3 basePosition;
       attribute vec3 color;
-      attribute float size;
+      attribute float worldSize;
       attribute float phase;
 
       uniform mat4 modelMatrix;
       uniform mat4 viewMatrix;
       uniform mat4 projectionMatrix;
       uniform float uTime;
-      uniform float uPixelRatio;
 
+      varying vec2 vUv;
       varying vec3 vColor;
       varying float vAgeAlpha;
 
       const float LIFE_TIME = ${STAR_LIFE_TIME.toFixed(1)};
       const float STAR_SPEED = ${STAR_SPEED.toFixed(1)};
-      const float SIZE_NEAR_DEPTH = ${STAR_SIZE_NEAR_DEPTH.toFixed(1)};
-      const float SIZE_FAR_DEPTH = ${STAR_SIZE_FAR_DEPTH.toFixed(1)};
-      const float SIZE_DEPTH_CURVE = ${STAR_SIZE_DEPTH_CURVE.toFixed(1)};
-      const float SIZE_FAR_SCALE = ${STAR_SIZE_FAR_SCALE.toFixed(2)};
-      const float SIZE_NEAR_SCALE = ${STAR_SIZE_NEAR_SCALE.toFixed(2)};
 
       void main(void) {
         float age = mod(uTime + phase, LIFE_TIME);
         float glow = smoothstep(0.0, 1.5, age);
         float gloom = 1.0 - smoothstep(LIFE_TIME - 2.0, LIFE_TIME, age);
-        vec3 worldPosition = vec3(position.x, age * STAR_SPEED, position.z);
+        vec3 worldPosition = vec3(basePosition.x, age * STAR_SPEED, basePosition.z);
 
+        vUv = uv;
         vColor = color;
         vAgeAlpha = glow * gloom;
 
         vec4 viewPosition = viewMatrix * modelMatrix * vec4(worldPosition, 1.0);
-        float depth = max(-viewPosition.z, 0.001);
-        float depthRange = max(SIZE_FAR_DEPTH - SIZE_NEAR_DEPTH, 0.001);
-        float nearFactor = pow(clamp((SIZE_FAR_DEPTH - depth) / depthRange, 0.0, 1.0), SIZE_DEPTH_CURVE);
-        float perspectiveScale = mix(SIZE_FAR_SCALE, SIZE_NEAR_SCALE, nearFactor);
+        viewPosition.xy += corner * worldSize;
 
         gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = size * perspectiveScale * uPixelRatio;
       }
     `,
     fragment: /* glsl */ `
@@ -182,11 +193,12 @@ function createStarfield(): Mesh {
       uniform sampler2D tMap;
       uniform float uGlobalAlpha;
 
+      varying vec2 vUv;
       varying vec3 vColor;
       varying float vAgeAlpha;
 
       void main(void) {
-        vec4 texel = texture2D(tMap, gl_PointCoord);
+        vec4 texel = texture2D(tMap, vUv);
         float alpha = texel.r * vAgeAlpha;
         vec3 color = mix(vColor, vec3(1.0, 0.8, 0.3), texel.r) * alpha * uGlobalAlpha;
 
@@ -196,7 +208,6 @@ function createStarfield(): Mesh {
     uniforms: {
       tMap: { value: starTexture },
       uTime: { value: 0 },
-      uPixelRatio: { value: renderer.dpr },
       uGlobalAlpha: { value: 0 },
     },
     transparent: true,
@@ -207,11 +218,11 @@ function createStarfield(): Mesh {
   // 星星使用加法混合，叠加出发光效果
   program.setBlendFunc(gl.ONE, gl.ONE)
 
-  // 返回以 gl.POINTS 绘制的星星网格
+  // 返回以实例化三角面绘制的世界空间 billboard 星星网格
   return new Mesh(gl, {
     geometry,
     program,
-    mode: gl.POINTS,
+    mode: gl.TRIANGLES,
     frustumCulled: false,
     renderOrder: 1,
   })
@@ -369,8 +380,6 @@ function resize(): void {
   camera.perspective({
     aspect: gl.canvas.width / gl.canvas.height,
   })
-  // 同步 DPR，保证点精灵在高分屏上尺寸一致
-  starfield.program.uniforms.uPixelRatio.value = renderer.dpr
 }
 
 function updateCamera(delta: number): void {
