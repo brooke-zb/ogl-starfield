@@ -15,6 +15,10 @@ import { createStarfield } from './starfield'
 const canvas = document.createElement('canvas')
 canvas.id = 'bg'
 canvas.setAttribute('aria-label', 'WebGL Starfield')
+canvas.style.position = 'fixed'
+canvas.style.top = '0'
+canvas.style.left = '0'
+canvas.style.zIndex = '-1'
 document.body.appendChild(canvas)
 
 // 初始化 OGL 渲染器，并设置深空背景色
