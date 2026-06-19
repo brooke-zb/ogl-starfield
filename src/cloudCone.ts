@@ -8,6 +8,7 @@ import {
   CLOUD_RADIAL_SEGMENTS,
 } from './constants'
 import { loadTexture } from './texture'
+import cloudTilePicUrl from '/src/assets/textures/tile.jpg?url'
 
 function createConeGeometry(gl: OGLRenderingContext): Geometry {
   // 按圆周和高度分段生成锥体顶点、UV 和索引
@@ -72,7 +73,7 @@ function createConeGeometry(gl: OGLRenderingContext): Geometry {
 
 export function createCloudCone(gl: OGLRenderingContext): Mesh {
   // 加载可平铺云纹理，作为星云密度采样源
-  const cloudTexture = loadTexture(gl, '/assets/textures/tile.jpg', {
+  const cloudTexture = loadTexture(gl, cloudTilePicUrl, {
     wrapS: gl.REPEAT,
     wrapT: gl.REPEAT,
     generateMipmaps: true,

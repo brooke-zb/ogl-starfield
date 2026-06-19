@@ -10,6 +10,7 @@ import {
   STAR_WORLD_SIZE_MIN,
 } from './constants'
 import { loadTexture } from './texture'
+import starPicUrl from '/src/assets/textures/star.jpg?url'
 
 export function createStarfield(gl: OGLRenderingContext): Mesh {
   // 准备 billboard 基础面片和实例化属性
@@ -57,7 +58,7 @@ export function createStarfield(gl: OGLRenderingContext): Mesh {
   }
 
   // 加载星星贴图，使用红色通道作为亮度和透明度权重
-  const starTexture = loadTexture(gl, '/assets/textures/star.jpg', {
+  const starTexture = loadTexture(gl, starPicUrl, {
     generateMipmaps: true,
     minFilter: gl.LINEAR_MIPMAP_LINEAR,
     magFilter: gl.LINEAR,
