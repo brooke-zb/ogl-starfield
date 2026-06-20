@@ -48,6 +48,3 @@ export const CAMERA_BASE_TARGET: [number, number, number] = [0, 0, 0]
 
 // 场景清屏背景色，取值范围为 0 到 1 的 RGBA
 export const CLEAR_COLOR = [2 / 255, 6 / 255, 25 / 255, 1] as const
-
-// 后处理锐化强度，越高星点和星云边缘越锐利
-export const SHARPEN_STRENGTH = 0.2

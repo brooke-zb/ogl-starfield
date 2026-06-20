@@ -139,6 +139,11 @@ window.addEventListener('touchstart', function (event) {
     updatePointer(event.touches[0].clientX, event.touches[0].clientY)
   }
 })
+window.addEventListener('touchmove', function (event) {
+  if (event.touches.length === 1) {
+    updatePointer(event.touches[0].clientX, event.touches[0].clientY)
+  }
+})
 document.addEventListener('visibilitychange', function () {
   pageVisible = document.visibilityState === 'visible'
 })
